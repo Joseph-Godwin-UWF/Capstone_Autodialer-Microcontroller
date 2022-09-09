@@ -18,8 +18,12 @@
  
 void setup() {
   Serial.begin(9600);
-   stepper.setMaxSpeed(MAX_SPEED);
-   stepper.setSpeed(200);
+
+  //WAIT FOR INITIAL COMMUNICATION
+  while(Serial.available() == 0) { delay(200); }
+  blockUntilSetUpMessageIsReceived();
+  stepper.setMaxSpeed(MAX_SPEED);
+  stepper.setSpeed(200);
 }
 
 /**
@@ -32,10 +36,11 @@ void loop() {
 
   //STORE DATA RECEIVED IN A STRING
   String recv = getDataFromSerial();
-  if( isSetUpMessage(recv) ){
-    parseStepperSetupMessage(recv, STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
-    Serial.println(messenger.STEPPER_SETUP_COMPLETE);
-  }
+  //if( isSetUpMessage(recv) ){
+   // parseStepperSetupMessage(recv, STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
+   // Serial.println(messenger.STEPPER_SETUP_COMPLETE);
+ // }
+ Serial.println("Received: " + recv);
 
 }
 
@@ -52,6 +57,24 @@ String getDataFromSerial(){
     if(ch == '\n')
       return data;
     data += ch;
+  }
+}
+
+void blockUntilSetUpMessageIsReceived(){
+  String recv = getDataFromSerial();
+  if( isSetUpMessage(recv) ){
+    parseStepperSetupMessage(recv, STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
+    String stepperInfo = messenger.stepperMotorParametersToString(STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
+    Serial.println(messenger.STEPPER_SETUP_COMPLETE + stepperInfo);
+  }else{
+    do{
+      Serial.println(messenger.STEPPER_SETUP_FAILED);
+      while(Serial.available() == 0) { delay(200); }
+      recv = getDataFromSerial();
+    }while(!isSetUpMessage(recv));
+    parseStepperSetupMessage(recv, STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
+    String stepperInfo = messenger.stepperMotorParametersToString(STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
+    Serial.println(messenger.STEPPER_SETUP_COMPLETE + stepperInfo);
   }
 }
 
