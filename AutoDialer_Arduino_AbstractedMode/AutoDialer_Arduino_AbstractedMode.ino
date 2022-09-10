@@ -1,7 +1,6 @@
 #include <AccelStepper.h>
 #include "Messenger.h"
-
-//TESTING CHANGE
+#include "MessageHandler.h"
 
 #define pwmStepper 6
 #define dirStepper 40
@@ -12,16 +11,22 @@
  float STEPS_PER_REV = 360 / STEP_ANGLE;
  int DIALING_SPEED = 400;
  int MAX_SPEED = 800;
- String initialMessageHeader = "SetUpStepper";
+ String initialMessageHeader = "SetUpStepper:";
+ String turnDialHeader = "TurnDial:";
  const char* delimiter = ";";
  AccelStepper stepper(AccelStepper::DRIVER, pwmStepper, dirStepper);
 
  Messenger messenger;
+ MessageHandler messageHandler(initialMessageHeader, turnDialHeader);
  
 void setup() {
   Serial.begin(9600);
-   stepper.setMaxSpeed(MAX_SPEED);
-   stepper.setSpeed(200);
+
+  //WAIT FOR INITIAL COMMUNICATION
+  while(Serial.available() == 0) { delay(200); }
+  blockUntilSetUpMessageIsReceived();
+  stepper.setMaxSpeed(MAX_SPEED);
+  stepper.setSpeed(200);
 }
 
 /**
@@ -29,14 +34,38 @@ void setup() {
  */
 
 void loop() {
-  //WAIT FOR INITIAL COMMUNICATION
+  //WAIT FOR MESSAGE COMMUNICATION
+  String error = getDataFromSerial();
+  Serial.println("Data still on line: " + error);
   while(Serial.available() == 0) { delay(200); }
-
   //STORE DATA RECEIVED IN A STRING
   String recv = getDataFromSerial();
-  if( isSetUpMessage(recv) ){
-    parseStepperSetupMessage(recv, STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
-    Serial.println(messenger.STEPPER_SETUP_COMPLETE);
+
+  Serial.println("recv: " + recv);
+  String header = recv.substring(0, recv.indexOf(':') + 1);
+  int action = messageHandler.getAction(header);
+  Serial.println("Header: -" + header + "-");
+  switch(action){
+    
+    case MessageHandler::INVALID_ACTION:{
+      Serial.println(messenger.STEPPER_SETUP_FAILED + recv);
+      break;
+    }
+      
+    case MessageHandler::UPDATE_STEPPER_PARAMETERS:{
+      String stepperInfo = messenger.stepperMotorParametersToString(STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
+      Serial.println(messenger.STEPPER_SETUP_COMPLETE + stepperInfo);
+      break;
+    }
+  
+    case MessageHandler::ROTATE_DIAL:{
+      Serial.println("rotate dial case");
+      break;
+    }
+
+    default:
+      break;
+      //error
   }
 
 }
@@ -57,6 +86,24 @@ String getDataFromSerial(){
   }
 }
 
+void blockUntilSetUpMessageIsReceived(){
+  String recv = getDataFromSerial();
+  if( isSetUpMessage(recv) ){
+    parseStepperSetupMessage(recv, STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
+    String stepperInfo = messenger.stepperMotorParametersToString(STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
+    Serial.println(messenger.STEPPER_SETUP_COMPLETE + stepperInfo);
+  }else{
+    do{
+      Serial.println(messenger.STEPPER_SETUP_FAILED + recv);
+      while(Serial.available() == 0) { delay(200); }
+      recv = getDataFromSerial();
+    }while(!isSetUpMessage(recv));
+    parseStepperSetupMessage(recv, STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
+    String stepperInfo = messenger.stepperMotorParametersToString(STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
+    Serial.println(messenger.STEPPER_SETUP_COMPLETE + stepperInfo);
+  }
+}
+
 void parseStepperSetupMessage(String recv, float &stepAngle, int &dialingSpeed, int &maxspeed){
   /* REMOVE HEADER FROM DATA */
   int headerSizeToRemove = recv.indexOf(initialMessageHeader) + initialMessageHeader.length();
@@ -68,8 +115,8 @@ void parseStepperSetupMessage(String recv, float &stepAngle, int &dialingSpeed, 
    strcpy(cstringRecv, recv.c_str());
 
    String stepAngleString(strtok(cstringRecv, delimiter));
-   String dialingSpeedString(strtok(NULL, ";"));
-   String maxSpeedString(strtok(NULL, ";"));
+   String dialingSpeedString(strtok(NULL, delimiter));
+   String maxSpeedString(strtok(NULL, delimiter));
 
    stepAngle = stepAngleString.toFloat();
    dialingSpeed = dialingSpeedString.toInt();

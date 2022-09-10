@@ -1,0 +1,9 @@
+Message structure:
+XXX-> DATA1 DATA2 DATA3 ... \n
+
+"000" -> Stepper parameters have been adjusted
+	DATA SENT: STEP_ANGLE{float} DIALING_SPEED{int} MAX_SPEED{int}
+
+"600" -> Expected Stepper Motor Set Up, received something else
+	DATA SENT: <Message received>
+
