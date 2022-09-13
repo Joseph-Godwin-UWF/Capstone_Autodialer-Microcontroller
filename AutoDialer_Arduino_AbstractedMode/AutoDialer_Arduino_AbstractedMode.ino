@@ -2,8 +2,8 @@
 #include "Messenger.h"
 #include "MessageHandler.h"
 
-#define pwmStepper 6
-#define dirStepper 40
+#define pwmStepper 12
+#define dirStepper 14
 
 
 /* SETTING UP STEPPER MOTOR */
@@ -20,8 +20,8 @@
  MessageHandler messageHandler(initialMessageHeader, turnDialHeader);
  
 void setup() {
-  Serial.begin(9600);
-
+  Serial.begin(115200);
+  Serial.println("Setting up...");
   //WAIT FOR INITIAL COMMUNICATION
   while(Serial.available() == 0) { delay(200); }
   blockUntilSetUpMessageIsReceived();
@@ -36,7 +36,7 @@ void setup() {
 void loop() {
   //WAIT FOR MESSAGE COMMUNICATION
   String error = getDataFromSerial();
-  Serial.println("Data still on line: " + error);
+  //Serial.println("Data still on line: " + error);
   while(Serial.available() == 0) { delay(200); }
   //STORE DATA RECEIVED IN A STRING
   String recv = getDataFromSerial();
@@ -53,6 +53,7 @@ void loop() {
     }
       
     case MessageHandler::UPDATE_STEPPER_PARAMETERS:{
+      parseStepperSetupMessage(recv, STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
       String stepperInfo = messenger.stepperMotorParametersToString(STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
       Serial.println(messenger.STEPPER_SETUP_COMPLETE + stepperInfo);
       break;
