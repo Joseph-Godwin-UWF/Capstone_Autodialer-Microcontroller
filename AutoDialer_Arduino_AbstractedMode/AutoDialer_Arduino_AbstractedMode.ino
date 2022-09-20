@@ -61,6 +61,8 @@ void loop() {
   
     case MessageHandler::ROTATE_DIAL:{
       Serial.println("rotate dial case");
+      int degreesOfRotation = getDegreesOfRotationFromMessage(recv);
+      rotate(degreesOfRotation);
       break;
     }
 
@@ -85,6 +87,26 @@ String getDataFromSerial(){
       return data;
     data += ch;
   }
+}
+
+void rotate(int degreesOfRotation){
+  setDirectionPin(degreesOfRotation);
+  degreesOfRotation = abs(degreesOfRotation);
+  int stepsToTake = (int)((float)degreesOfRotation / STEP_ANGLE);
+  //FIXME: FINISH FUNCTION TO ROTATE STEPPER MOTOR
+}
+
+/**
+ * Sets the DIR pin for either CLOCKWISE (+) or COUNTER-CLOCKWISE (-)
+ */
+void setDirectionPin(int degreesOfRotation){
+  if(degreesOfRotation < 0){
+    digitalWrite(dirStepper, LOW);
+  }
+  else{
+    digitalWrite(dirStepper, HIGH);
+  }
+  return;
 }
 
 void blockUntilSetUpMessageIsReceived(){
@@ -122,8 +144,21 @@ void parseStepperSetupMessage(String recv, float &stepAngle, int &dialingSpeed, 
    stepAngle = stepAngleString.toFloat();
    dialingSpeed = dialingSpeedString.toInt();
    maxspeed = maxSpeedString.toInt();
+}
 
-   
+int getDegreesOfRotationFromMessage(String recv){
+  /* REMOVE HEADER FROM DATA */
+  int headerSizeToRemove = recv.indexOf(turnDialHeader) + turnDialHeader.length();
+  recv.remove(0, headerSizeToRemove);
+
+  /* c_str() returns a const char, so we can't use strtok()
+   * on it directly. Thus, we must copy sequence.c_str() to
+   * another cString */
+   char cstringRecv[recv.length() + 1] = {};
+   strcpy(cstringRecv, recv.c_str());
+
+   String degreesOfRotationString(strtok(cstringRecv, delimiter));
+   return degreesOfRotationString.toInt();
 }
 
 boolean isSetUpMessage(String recv){
