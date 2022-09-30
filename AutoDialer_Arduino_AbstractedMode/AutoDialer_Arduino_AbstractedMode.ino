@@ -93,7 +93,18 @@ void rotate(int degreesOfRotation){
   setDirectionPin(degreesOfRotation);
   degreesOfRotation = abs(degreesOfRotation);
   int stepsToTake = (int)((float)degreesOfRotation / STEP_ANGLE);
-  //FIXME: FINISH FUNCTION TO ROTATE STEPPER MOTOR
+  runMotor(stepsToTake, DIALING_SPEED); //rotates motor until position reached
+  /*FIXME:
+   * - should probably leave degreesOdRotation negative, moveTo() accepts negative
+   * - runMotor() might require resetting zero after each run, not sure yet (testing needed)
+   */
+}
+
+void runMotor(int stepsToTake, int motorSpeed){
+  stepper.moveTo(stepsToTake);
+  stepper.setSpeed(motorSpeed);
+  while(stepper.distanceToGo() != 0)
+    stepper.runSpeedToPosition();
 }
 
 /**
