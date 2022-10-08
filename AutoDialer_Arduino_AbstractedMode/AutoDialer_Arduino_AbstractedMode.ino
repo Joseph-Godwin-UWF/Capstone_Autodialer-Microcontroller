@@ -2,8 +2,8 @@
 #include "Messenger.h"
 #include "MessageHandler.h"
 
-#define pwmStepper 16
-#define dirStepper 17
+#define pwmStepper 17
+#define dirStepper 16
 
 
 /* SETTING UP STEPPER MOTOR */
