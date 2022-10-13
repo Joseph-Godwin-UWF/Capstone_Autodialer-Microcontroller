@@ -2,8 +2,8 @@
 #include "Messenger.h"
 #include "MessageHandler.h"
 
-#define pwmStepper 17
-#define dirStepper 16
+#define pwmStepper 16
+#define dirStepper 17
 
 
 /* SETTING UP STEPPER MOTOR */
@@ -95,13 +95,13 @@ String getDataFromSerial() {
 }
 
 void rotate(int degreesOfRotation) {
-  setDirectionPin(degreesOfRotation);
+  setDirectionPin(degreesOfRotation); //FIXME: these 2 lines are probably obsolete, since moveTo() accepts negative inputs
   degreesOfRotation = abs(degreesOfRotation);
   int stepsToTake = (int)((float)degreesOfRotation / STEP_ANGLE);
   runMotor(stepsToTake, DIALING_SPEED); //rotates motor until position reached
   /*FIXME:
      - should probably leave degreesOdRotation negative, moveTo() accepts negative
-     - runMotor() might require resetting zero after each run, not sure yet (testing needed)
+     - runMotor() now resets current pos
   */
 }
 
@@ -116,6 +116,7 @@ void runMotor(int stepsToTake, int motorSpeed) {
 /**
    Sets the DIR pin for either CLOCKWISE (+) or COUNTER-CLOCKWISE (-)
 */
+//FIXME: probably obsolete for AccelStepper
 void setDirectionPin(int degreesOfRotation) {
   if (degreesOfRotation < 0) {
     digitalWrite(dirStepper, LOW);
