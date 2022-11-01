@@ -1,14 +1,21 @@
 #include <AccelStepper.h>
+#include "HX711.h"
 #include "Messenger.h"
 #include "MessageHandler.h"
 
-#define pwmStepper 15
-#define dirStepper 2
+TaskHandle_t Task1;
+
+#define pwmStepper 2
+#define dirStepper 15
 #define ms1pin 19
 #define ms2pin 18
 #define ms3pin 5
+#define stepperEnable 16
+
 #define button 4
-#define LED 16
+
+#define LOADCELL_DATA 26
+#define LOADCELL_CLOCK 27
 
 
 /* SETTING UP STEPPER MOTOR */
@@ -25,17 +32,19 @@ int ms1 = 0;
 int ms2 = 0;
 int ms3 = 0;
 AccelStepper stepper(AccelStepper::DRIVER, pwmStepper, dirStepper);
+HX711 torqueTransducer;
 
 Messenger messenger;
 MessageHandler messageHandler(initialMessageHeader, turnDialHeader, setStepSizeHeader);
 
 void setup() {
   pinMode(button, INPUT);
-  pinMode(LED, OUTPUT);
   pinMode(ms1pin, OUTPUT);
   pinMode(ms2pin, OUTPUT);
   pinMode(ms3pin, OUTPUT);
+  pinMode(stepperEnable, OUTPUT);
   Serial.begin(115200);
+  torqueTransducer.begin(LOADCELL_DATA, LOADCELL_CLOCK);
   //WAIT FOR INITIAL COMMUNICATION
   while (Serial.available() == 0) {
     delay(200);
@@ -43,6 +52,37 @@ void setup() {
   blockUntilSetUpMessageIsReceived();
   stepper.setMaxSpeed(MAX_SPEED);
   stepper.setSpeed(200);
+  digitalWrite(stepperEnable, LOW);
+
+  xTaskCreatePinnedToCore(
+                    Task1code,   /* Task function. */
+                    "Task1",     /* name of task. */
+                    10000,       /* Stack size of task */
+                    NULL,        /* parameter of the task */
+                    1,           /* priority of the task */
+                    &Task1,      /* Task handle to keep track of created task */
+                    0);          /* pin task to core 0 */                  
+  delay(500);  
+}
+
+void Task1code( void * pvParameters ){
+  /*for(;;){
+    if(torqueTransducer.is_ready()) {
+      long reading = torqueTransducer.read();
+      if(reading > 200000){
+        Serial.println(messenger.THRESHOLD_TORQUE_REACHED);
+        digitalWrite(stepperEnable, HIGH);
+      }
+      else{
+        Serial.print(messenger.TORQUE_READING);
+        Serial.println(reading);
+      }
+    }
+    vTaskDelay(15);
+  }*/ 
+  for(;;){
+    vTaskDelay(200);
+  }
 }
 
 /**
@@ -88,9 +128,8 @@ void loop() {
       }
 
     case MessageHandler::UPDATE_STEP_SIZE: {
-        parseSetStepperBitsMessage(recv);
+        parseSetStepperBitsMessage(recv, ms1, ms2, ms3);
         setStepSizePins();
-        Serial.println(
         break;
     }
 
@@ -171,7 +210,7 @@ void blockUntilSetUpMessageIsReceived() {
   }
 }
 
-void parseSetStepperBitsMessage(String recv int &ms1, int &ms2, int &ms3){
+void parseSetStepperBitsMessage(String recv, int &ms1, int &ms2, int &ms3){
   /* REMOVE HEADER FROM DATA */
   int headerSizeToRemove = recv.indexOf(initialMessageHeader) + initialMessageHeader.length();
   recv.remove(0, headerSizeToRemove);
