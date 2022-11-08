@@ -21,8 +21,7 @@ TaskHandle_t Task1;
 /* SETTING UP STEPPER MOTOR */
 float STEP_ANGLE = 1.8;
 float STEPS_PER_REV = 360 / STEP_ANGLE;
-int DIALING_SPEED = 400;
-int MAX_SPEED = 800;
+int DIALING_SPEED = 200;
 String initialMessageHeader =  "000:";
 String setStepSizeHeader =     "001:";
 String setDialingSpeedHeader = "002:";
@@ -57,8 +56,8 @@ void setup() {
     delay(200);
   }
   blockUntilSetUpMessageIsReceived();
-  stepper.setMaxSpeed(MAX_SPEED);
-  stepper.setSpeed(200);
+  stepper.setMaxSpeed(DIALING_SPEED);
+  stepper.setSpeed(DIALING_SPEED);
   digitalWrite(stepperEnable, LOW);
 
   xTaskCreatePinnedToCore(
@@ -105,44 +104,40 @@ void loop() {
   }
   //STORE DATA RECEIVED IN A STRING
   String recv = getDataFromSerial();
-  //Serial.println("RECV: " + recv);
 
-  //Serial.println("recv: " + recv);
   String header = recv.substring(0, recv.indexOf(':') + 1);
   int action = messageHandler.getAction(header);
-  //Serial.println("Header: -" + header + "-");
   switch (action) {
 
     case MessageHandler::INVALID_ACTION: {
-      Serial.println("invalid action");
         Serial.println(messenger.INVALID_SETUP_MESSAGE);
         break;
       }
 
     case MessageHandler::INITIAL_SETUP: {
-      Serial.println("initial setup");
         Serial.println(messenger.INITIAL_SETUP_COMPLETE);
         break;
       }
 
     case MessageHandler::ROTATE_DIAL: {
-        Serial.println("rotate dial");
         int ticksToRotate = getTicksToRotateFromMessage(recv);
         rotate(ticksToRotate);
-        //delay(3000);//FOR DEBUGGING
-        Serial.println(messenger.REQUEST_NEXT_ANGLE);
+        Serial.println(messenger.REQUEST_NEXT_TURN);
         break;
       }
 
     case MessageHandler::UPDATE_STEP_SIZE: {
-        Serial.println("updating step size");
         parseSetStepperBitsMessage(recv, ms1, ms2, ms3);
-        setStepSizePins();
+        digitalWrite(ms1pin, ms1);
+        digitalWrite(ms2pin, ms2);
+        digitalWrite(ms3pin, ms3);
         break;
     }
 
     case MessageHandler::UPDATE_DIALING_SPEED: {
-      //FIXME: UPDATE DIALING SPEED
+      parseSetDialingSpeedMessage(recv, DIALING_SPEED);
+      stepper.setMaxSpeed(DIALING_SPEED);
+      stepper.setSpeed(DIALING_SPEED);
       Serial.println("updating dialing speed");
       break;
     }
@@ -189,7 +184,7 @@ void blockUntilSetUpMessageIsReceived() {
     Serial.println(messenger.INITIAL_SETUP_COMPLETE);
   } else {
     do {
-      Serial.println(messenger.INVALID_SETUP_MESSAGE + recv);
+      Serial.println(messenger.INVALID_SETUP_MESSAGE);
       while (Serial.available() == 0) {
         delay(200);
       }
@@ -201,27 +196,18 @@ void blockUntilSetUpMessageIsReceived() {
 
 void parseSetStepperBitsMessage(String recv, int &ms1, int &ms2, int &ms3){
   /* REMOVE HEADER FROM DATA */
-  int headerSizeToRemove = recv.indexOf(initialMessageHeader) + initialMessageHeader.length();
+  int headerSizeToRemove = recv.indexOf(setStepSizeHeader) + setStepSizeHeader.length();
   recv.remove(0, headerSizeToRemove);
-  Serial.println("StepBits:");
   ms1 = recv[0] - 48;
   ms2 = recv[1] - 48;
   ms3 = recv[2] - 48;  
 }
 
-void setStepSizePins(){
-  if(ms1 == 1)
-    digitalWrite(ms1pin, HIGH);
-  else
-    digitalWrite(ms1pin, LOW);
-  if(ms2 == 1)
-    digitalWrite(ms2pin, HIGH);
-  else
-    digitalWrite(ms2pin, LOW);
-  if(ms3 == 1)
-    digitalWrite(ms3pin, HIGH);
-  else
-    digitalWrite(ms3pin, LOW);
+void parseSetDialingSpeedMessage(String recv, int &dialingSpeed){
+  /* REMOVE HEADER FROM DATA */
+  int headerSizeToRemove = recv.indexOf(setDialingSpeedHeader) + setDialingSpeedHeader.length();
+  recv.remove(0, headerSizeToRemove);
+  dialingSpeed = recv.toInt();
 }
 
 //FIXME: THIS IS DEPRECATED
