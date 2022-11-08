@@ -2,8 +2,8 @@
  
  class Messenger{
     public:
-      String STEPPER_SETUP_COMPLETE = "000-> ";
-      String STEPPER_SETUP_FAILED   = "600-> ";
+      String INITIAL_SETUP_COMPLETE = "000:";
+      String INVALID_SETUP_MESSAGE   = "999:";
       String REQUEST_NEXT_ANGLE = "001-> ";
       String TORQUE_READING = "003->";
       String THRESHOLD_TORQUE_REACHED = "002->";

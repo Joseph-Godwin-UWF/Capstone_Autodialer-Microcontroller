@@ -23,9 +23,11 @@ float STEP_ANGLE = 1.8;
 float STEPS_PER_REV = 360 / STEP_ANGLE;
 int DIALING_SPEED = 400;
 int MAX_SPEED = 800;
-String initialMessageHeader = "SetUpStepper:";
-String turnDialHeader = "TurnDial:";
-String setStepSizeHeader = "SetStepBits:"; // double check this!!
+String initialMessageHeader =  "000:";
+String setStepSizeHeader =     "001:";
+String setDialingSpeedHeader = "002:";
+String turnDialHeader =        "003:";
+
 const char* delimiter = ";";
 //STEPSIZE SELECTION PINS
 int ms1 = 0;
@@ -35,9 +37,14 @@ AccelStepper stepper(AccelStepper::DRIVER, pwmStepper, dirStepper);
 HX711 torqueTransducer;
 
 Messenger messenger;
-MessageHandler messageHandler(initialMessageHeader, turnDialHeader, setStepSizeHeader);
+MessageHandler messageHandler;
 
-void setup() {
+void setup() { 
+  messageHandler.setInitialMessageHeader(initialMessageHeader);
+  messageHandler.setSetStepBitsHeader(setStepSizeHeader);
+  messageHandler.setSetDialingSpeedHeader(setDialingSpeedHeader);
+  messageHandler.setTurnDialHeader(turnDialHeader);
+
   pinMode(button, INPUT);
   pinMode(ms1pin, OUTPUT);
   pinMode(ms2pin, OUTPUT);
@@ -107,30 +114,37 @@ void loop() {
   switch (action) {
 
     case MessageHandler::INVALID_ACTION: {
-        Serial.println(messenger.STEPPER_SETUP_FAILED + recv);
+      Serial.println("invalid action");
+        Serial.println(messenger.INVALID_SETUP_MESSAGE);
         break;
       }
 
-    case MessageHandler::UPDATE_STEPPER_PARAMETERS: {
-        parseStepperSetupMessage(recv, STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
-        String stepperInfo = messenger.stepperMotorParametersToString(STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
-        Serial.println(messenger.STEPPER_SETUP_COMPLETE + stepperInfo);
+    case MessageHandler::INITIAL_SETUP: {
+      Serial.println("initial setup");
+        Serial.println(messenger.INITIAL_SETUP_COMPLETE);
         break;
       }
 
     case MessageHandler::ROTATE_DIAL: {
-        //Serial.println("rotate dial case");
-        int degreesOfRotation = getDegreesOfRotationFromMessage(recv);
-        rotate(degreesOfRotation);
+        Serial.println("rotate dial");
+        int ticksToRotate = getTicksToRotateFromMessage(recv);
+        rotate(ticksToRotate);
         //delay(3000);//FOR DEBUGGING
         Serial.println(messenger.REQUEST_NEXT_ANGLE);
         break;
       }
 
     case MessageHandler::UPDATE_STEP_SIZE: {
+        Serial.println("updating step size");
         parseSetStepperBitsMessage(recv, ms1, ms2, ms3);
         setStepSizePins();
         break;
+    }
+
+    case MessageHandler::UPDATE_DIALING_SPEED: {
+      //FIXME: UPDATE DIALING SPEED
+      Serial.println("updating dialing speed");
+      break;
     }
 
     default:
@@ -156,15 +170,8 @@ String getDataFromSerial() {
   }
 }
 
-void rotate(int degreesOfRotation) {
-  //setDirectionPin(degreesOfRotation); //FIXME: these 2 lines are probably obsolete, since moveTo() accepts negative inputs
- // degreesOfRotation = abs(degreesOfRotation);
-  int stepsToTake = (int)((float)degreesOfRotation / STEP_ANGLE);
-  runMotor(stepsToTake, DIALING_SPEED); //rotates motor until position reached
-  /*FIXME:
-     - should probably leave degreesOdRotation negative, moveTo() accepts negative
-     - runMotor() now resets current pos
-  */
+void rotate(int ticksToRotate) {
+  runMotor(ticksToRotate, DIALING_SPEED); //rotates motor until position reached
 }
 
 void runMotor(int stepsToTake, int motorSpeed) {
@@ -176,37 +183,19 @@ void runMotor(int stepsToTake, int motorSpeed) {
   stepper.setCurrentPosition(0);
 }
 
-/**
-   Sets the DIR pin for either CLOCKWISE (+) or COUNTER-CLOCKWISE (-)
-*/
-//FIXME: probably obsolete for AccelStepper
-void setDirectionPin(int degreesOfRotation) {
-  if (degreesOfRotation < 0) {
-    digitalWrite(dirStepper, LOW);
-  }
-  else {
-    digitalWrite(dirStepper, HIGH);
-  }
-  return;
-}
-
 void blockUntilSetUpMessageIsReceived() {
   String recv = getDataFromSerial();
   if ( isSetUpMessage(recv) ) {
-    parseStepperSetupMessage(recv, STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
-    String stepperInfo = messenger.stepperMotorParametersToString(STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
-    Serial.println(messenger.STEPPER_SETUP_COMPLETE + stepperInfo);
+    Serial.println(messenger.INITIAL_SETUP_COMPLETE);
   } else {
     do {
-      Serial.println(messenger.STEPPER_SETUP_FAILED + recv);
+      Serial.println(messenger.INVALID_SETUP_MESSAGE + recv);
       while (Serial.available() == 0) {
         delay(200);
       }
       recv = getDataFromSerial();
     } while (!isSetUpMessage(recv));
-    parseStepperSetupMessage(recv, STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
-    String stepperInfo = messenger.stepperMotorParametersToString(STEP_ANGLE, DIALING_SPEED, MAX_SPEED);
-    Serial.println(messenger.STEPPER_SETUP_COMPLETE + stepperInfo);
+    Serial.println(messenger.INITIAL_SETUP_COMPLETE);
   }
 }
 
@@ -235,7 +224,7 @@ void setStepSizePins(){
     digitalWrite(ms3pin, LOW);
 }
 
-
+//FIXME: THIS IS DEPRECATED
 void parseStepperSetupMessage(String recv, float &stepAngle, int &dialingSpeed, int &maxspeed) {
   /* REMOVE HEADER FROM DATA */
   int headerSizeToRemove = recv.indexOf(initialMessageHeader) + initialMessageHeader.length();
@@ -255,7 +244,7 @@ void parseStepperSetupMessage(String recv, float &stepAngle, int &dialingSpeed, 
   maxspeed = maxSpeedString.toInt();
 }
 
-int getDegreesOfRotationFromMessage(String recv) {
+int getTicksToRotateFromMessage(String recv) {
   /* REMOVE HEADER FROM DATA */
   int headerSizeToRemove = recv.indexOf(turnDialHeader) + turnDialHeader.length();
   recv.remove(0, headerSizeToRemove);
@@ -266,8 +255,8 @@ int getDegreesOfRotationFromMessage(String recv) {
   char cstringRecv[recv.length() + 1] = {};
   strcpy(cstringRecv, recv.c_str());
 
-  String degreesOfRotationString(strtok(cstringRecv, delimiter));
-  return degreesOfRotationString.toInt();
+  String ticksToRotateString(strtok(cstringRecv, delimiter));
+  return ticksToRotateString.toInt();
 }
 
 boolean isSetUpMessage(String recv) {
