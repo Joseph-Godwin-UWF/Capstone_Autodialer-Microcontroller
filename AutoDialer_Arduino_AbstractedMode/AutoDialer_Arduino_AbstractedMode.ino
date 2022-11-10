@@ -131,6 +131,7 @@ void loop() {
         digitalWrite(ms1pin, ms1);
         digitalWrite(ms2pin, ms2);
         digitalWrite(ms3pin, ms3);
+        //Serial.println(messenger.STEP_RESOLUTION_SET);
         break;
     }
 
@@ -138,7 +139,7 @@ void loop() {
       parseSetDialingSpeedMessage(recv, DIALING_SPEED);
       stepper.setMaxSpeed(DIALING_SPEED);
       stepper.setSpeed(DIALING_SPEED);
-      Serial.println("updating dialing speed");
+      //Serial.println(messenger.DIALING_SPEED_SET);
       break;
     }
 
