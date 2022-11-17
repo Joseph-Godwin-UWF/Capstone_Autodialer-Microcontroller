@@ -91,7 +91,7 @@ void Task1code( void * pvParameters ){
       else{
         count = 0;
         //Serial.print(messenger.TORQUE_READING);
-        Serial.println(reading);
+        //Serial.println(reading);
       }
     }
     vTaskDelay(15);
