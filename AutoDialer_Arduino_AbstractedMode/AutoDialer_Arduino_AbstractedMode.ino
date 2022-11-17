@@ -72,30 +72,23 @@ void setup() {
 }
 
 void Task1code( void * pvParameters ){
-  long minimum = 100000;
-  int count = 0;
-  for(;;){
+  /*for(;;){
     if(torqueTransducer.is_ready()) {
       long reading = torqueTransducer.read();
-      if(reading < minimum) { minimum = reading; }
-      if(reading < 0){
-        count++;
-        Serial.println(reading);
-        Serial.print("minimum: ");
-        Serial.println(minimum);
-        if(count > 1){
-          Serial.println(messenger.THRESHOLD_TORQUE_REACHED);
-          digitalWrite(stepperEnable, HIGH);
-        }
-     }
+      if(reading > 200000){
+        Serial.println(messenger.THRESHOLD_TORQUE_REACHED);
+        digitalWrite(stepperEnable, HIGH);
+      }
       else{
-        count = 0;
-        //Serial.print(messenger.TORQUE_READING);
-        //Serial.println(reading);
+        Serial.print(messenger.TORQUE_READING);
+        Serial.println(reading);
       }
     }
     vTaskDelay(15);
-  } 
+  }*/ 
+  for(;;){
+    vTaskDelay(200);
+  }
 }
 
 /**
@@ -145,7 +138,7 @@ void loop() {
     case MessageHandler::UPDATE_DIALING_SPEED: {
       parseSetDialingSpeedMessage(recv, DIALING_SPEED);
       stepper.setMaxSpeed(DIALING_SPEED);
-      stepper.setSpeed(DIALING_SPEED);
+      //stepper.setSpeed(DIALING_SPEED); /* removed for acceleration */
       //Serial.println(messenger.DIALING_SPEED_SET);
       break;
     }
@@ -179,9 +172,10 @@ void rotate(int ticksToRotate) {
 
 void runMotor(int stepsToTake, int motorSpeed) {
   stepper.moveTo(stepsToTake);
-  stepper.setSpeed(motorSpeed);
+  //stepper.setSpeed(motorSpeed); /* removed for acceleration */
   while (stepper.distanceToGo() != 0){
-    stepper.runSpeedToPosition();
+    //stepper.runSpeedToPosition(); /* removed for acceleration */
+    stepper.run();
   }
   stepper.setCurrentPosition(0);
 }
