@@ -72,23 +72,30 @@ void setup() {
 }
 
 void Task1code( void * pvParameters ){
-  /*for(;;){
+  long minimum = 100000;
+  int count = 0;
+  for(;;){
     if(torqueTransducer.is_ready()) {
       long reading = torqueTransducer.read();
-      if(reading > 200000){
-        Serial.println(messenger.THRESHOLD_TORQUE_REACHED);
-        digitalWrite(stepperEnable, HIGH);
-      }
+      if(reading < minimum) { minimum = reading; }
+      if(reading < 0){
+        count++;
+        Serial.println(reading);
+        Serial.print("minimum: ");
+        Serial.println(minimum);
+        if(count > 1){
+          Serial.println(messenger.THRESHOLD_TORQUE_REACHED);
+          digitalWrite(stepperEnable, HIGH);
+        }
+     }
       else{
-        Serial.print(messenger.TORQUE_READING);
+        count = 0;
+        //Serial.print(messenger.TORQUE_READING);
         Serial.println(reading);
       }
     }
     vTaskDelay(15);
-  }*/ 
-  for(;;){
-    vTaskDelay(200);
-  }
+  } 
 }
 
 /**
