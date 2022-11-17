@@ -16,6 +16,7 @@ TaskHandle_t Task1;
 
 #define LOADCELL_DATA 26
 #define LOADCELL_CLOCK 27
+#define ACCELERATION 10
 
 
 /* SETTING UP STEPPER MOTOR */
@@ -39,6 +40,7 @@ Messenger messenger;
 MessageHandler messageHandler;
 
 void setup() { 
+  stepper.setAcceleration(ACCELERATION);
   messageHandler.setInitialMessageHeader(initialMessageHeader);
   messageHandler.setSetStepBitsHeader(setStepSizeHeader);
   messageHandler.setSetDialingSpeedHeader(setDialingSpeedHeader);
