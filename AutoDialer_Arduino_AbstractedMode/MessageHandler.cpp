@@ -26,6 +26,10 @@ void MessageHandler::setTurnDialHeader(String header){
   this->turnDialHeader = header;
 }
 
+void MessageHandler::setCalibrateTorqueThresholdHeader(String header){
+  this->calibrateTorqueThresholdHeader = header;
+}
+
 
 int MessageHandler::getAction(String header){
   if(header == this->setUpHeader)
@@ -36,6 +40,8 @@ int MessageHandler::getAction(String header){
     return this->UPDATE_STEP_SIZE;
   else if(header == this->setDialingSpeedHeader)
     return this->UPDATE_DIALING_SPEED;
+  else if(header == this->calibrateTorqueThresholdHeader)
+    return this->CALIBRATE_TORQUE_THRESHOLD;
   else
     return this->INVALID_ACTION;
 }

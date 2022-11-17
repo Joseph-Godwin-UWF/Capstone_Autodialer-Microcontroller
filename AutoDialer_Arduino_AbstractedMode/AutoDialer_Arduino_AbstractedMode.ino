@@ -4,6 +4,7 @@
 #include "MessageHandler.h"
 
 TaskHandle_t Task1;
+SemaphoreHandle_t readingTorqMutex;
 
 #define pwmStepper 2
 #define dirStepper 15
@@ -16,17 +17,23 @@ TaskHandle_t Task1;
 
 #define LOADCELL_DATA 26
 #define LOADCELL_CLOCK 27
-#define ACCELERATION 10
+#define ACCELERATION 1000
 
 
 /* SETTING UP STEPPER MOTOR */
 float STEP_ANGLE = 1.8;
 float STEPS_PER_REV = 360 / STEP_ANGLE;
 int DIALING_SPEED = 200;
+
 String initialMessageHeader =  "000:";
 String setStepSizeHeader =     "001:";
 String setDialingSpeedHeader = "002:";
 String turnDialHeader =        "003:";
+String calibrateTorqueThresholdHeader = "004:";
+
+/* TORQUE THRESHOLD */
+long TORQUE_THRESHOLD;
+double MIN_TORQUE_MULTIPLIER = 1.2; /* HOW MUCH TO MULTIPLY MINIMUM READ TORQUE FOR CALCULATING TORQUE_THRESHOLD */
 
 const char* delimiter = ";";
 //STEPSIZE SELECTION PINS
@@ -40,11 +47,13 @@ Messenger messenger;
 MessageHandler messageHandler;
 
 void setup() { 
+  readingTorqMutex = xSemaphoreCreateMutex();
   stepper.setAcceleration(ACCELERATION);
   messageHandler.setInitialMessageHeader(initialMessageHeader);
   messageHandler.setSetStepBitsHeader(setStepSizeHeader);
   messageHandler.setSetDialingSpeedHeader(setDialingSpeedHeader);
   messageHandler.setTurnDialHeader(turnDialHeader);
+  messageHandler.setCalibrateTorqueThresholdHeader(calibrateTorqueThresholdHeader);
 
   pinMode(button, INPUT);
   pinMode(ms1pin, OUTPUT);
@@ -74,23 +83,22 @@ void setup() {
 }
 
 void Task1code( void * pvParameters ){
-  /*for(;;){
+  for(;;){
     if(torqueTransducer.is_ready()) {
       long reading = torqueTransducer.read();
-      if(reading > 200000){
+      xSemaphoreTake( readingTorqMutex, portMAX_DELAY );
+      if(reading < TORQUE_THRESHOLD){
         Serial.println(messenger.THRESHOLD_TORQUE_REACHED);
         digitalWrite(stepperEnable, HIGH);
       }
       else{
-        Serial.print(messenger.TORQUE_READING);
-        Serial.println(reading);
+        //Serial.print(messenger.TORQUE_READING);
+        //Serial.println(reading);
       }
+      xSemaphoreGive( readingTorqMutex );
     }
     vTaskDelay(15);
-  }*/ 
-  for(;;){
-    vTaskDelay(200);
-  }
+  } 
 }
 
 /**
@@ -142,6 +150,27 @@ void loop() {
       stepper.setMaxSpeed(DIALING_SPEED);
       //stepper.setSpeed(DIALING_SPEED); /* removed for acceleration */
       //Serial.println(messenger.DIALING_SPEED_SET);
+      break;
+    }
+
+    case MessageHandler::CALIBRATE_TORQUE_THRESHOLD: {
+      int ticksToRotate = getTicksToRotateFromMessage(recv);
+      int minTorqReading = 999999;
+      stepper.moveTo(ticksToRotate);
+      while (stepper.distanceToGo() != 0){
+        stepper.run();
+        while(!torqueTransducer.is_ready()){} /* WAIT FOR TRANSDUCER TO BE READY */
+        long reading = torqueTransducer.read();
+        if(reading < minTorqReading){
+          minTorqReading = reading;
+        }
+      }
+      xSemaphoreTake( readingTorqMutex, portMAX_DELAY );
+      TORQUE_THRESHOLD = minTorqReading * MIN_TORQUE_MULTIPLIER;
+      xSemaphoreGive( readingTorqMutex );
+      Serial.println("threshold: ");
+      Serial.println(TORQUE_THRESHOLD);
+      stepper.setCurrentPosition(0);
       break;
     }
 
