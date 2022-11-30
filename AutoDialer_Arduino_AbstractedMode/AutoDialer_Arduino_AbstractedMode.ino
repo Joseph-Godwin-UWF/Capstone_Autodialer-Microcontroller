@@ -4,7 +4,7 @@
 #include "MessageHandler.h"
 
 TaskHandle_t Task1;
-SemaphoreHandle_t readingTorqMutex;
+SemaphoreHandle_t calibratingMutex;
 
 #define pwmStepper 2
 #define dirStepper 15
@@ -17,7 +17,7 @@ SemaphoreHandle_t readingTorqMutex;
 
 #define LOADCELL_DATA 26
 #define LOADCELL_CLOCK 27
-#define ACCELERATION 1000
+#define ACCELERATION 16000
 
 
 /* SETTING UP STEPPER MOTOR */
@@ -32,8 +32,11 @@ String turnDialHeader =        "003:";
 String calibrateTorqueThresholdHeader = "004:";
 
 /* TORQUE THRESHOLD */
-long TORQUE_THRESHOLD;
-double MIN_TORQUE_MULTIPLIER = 1.2; /* HOW MUCH TO MULTIPLY MINIMUM READ TORQUE FOR CALCULATING TORQUE_THRESHOLD */
+boolean calibrating = false;
+boolean calibrated = false;
+long TORQUE_THRESHOLD = 999999;
+long TORQ_THRESH_BUFFER = 10000;
+//double MIN_TORQUE_MULTIPLIER = 0.2; /* HOW MUCH TO MULTIPLY MINIMUM READ TORQUE FOR CALCULATING TORQUE_THRESHOLD */
 
 const char* delimiter = ";";
 //STEPSIZE SELECTION PINS
@@ -47,7 +50,7 @@ Messenger messenger;
 MessageHandler messageHandler;
 
 void setup() { 
-  readingTorqMutex = xSemaphoreCreateMutex();
+  calibratingMutex = xSemaphoreCreateMutex();
   stepper.setAcceleration(ACCELERATION);
   messageHandler.setInitialMessageHeader(initialMessageHeader);
   messageHandler.setSetStepBitsHeader(setStepSizeHeader);
@@ -86,18 +89,27 @@ void Task1code( void * pvParameters ){
   for(;;){
     if(torqueTransducer.is_ready()) {
       long reading = torqueTransducer.read();
-      xSemaphoreTake( readingTorqMutex, portMAX_DELAY );
-      if(reading < TORQUE_THRESHOLD){
+      
+      xSemaphoreTake( calibratingMutex, portMAX_DELAY );
+      if(calibrating && (reading < TORQUE_THRESHOLD)){
+        Serial.println("Calibrating");
+        TORQUE_THRESHOLD = reading;
+      }
+      xSemaphoreGive( calibratingMutex );
+      
+      if(reading < ( TORQUE_THRESHOLD - TORQ_THRESH_BUFFER) && calibrated){
         Serial.println(messenger.THRESHOLD_TORQUE_REACHED);
+        Serial.print(TORQUE_THRESHOLD - TORQ_THRESH_BUFFER);
+        Serial.print(" > ");
+        Serial.println(reading);
         digitalWrite(stepperEnable, HIGH);
       }
       else{
         //Serial.print(messenger.TORQUE_READING);
         //Serial.println(reading);
       }
-      xSemaphoreGive( readingTorqMutex );
     }
-    vTaskDelay(15);
+    vTaskDelay(50);
   } 
 }
 
@@ -130,7 +142,7 @@ void loop() {
       }
 
     case MessageHandler::ROTATE_DIAL: {
-        int ticksToRotate = getTicksToRotateFromMessage(recv);
+        int ticksToRotate = getTicksToRotateFromMessage(turnDialHeader, recv);
         rotate(ticksToRotate);
         Serial.println(messenger.REQUEST_NEXT_TURN);
         break;
@@ -154,21 +166,23 @@ void loop() {
     }
 
     case MessageHandler::CALIBRATE_TORQUE_THRESHOLD: {
-      int ticksToRotate = getTicksToRotateFromMessage(recv);
-      int minTorqReading = 999999;
+      Serial.print("Before calibration: ");
+      Serial.println(TORQUE_THRESHOLD);
+      int ticksToRotate = getTicksToRotateFromMessage(calibrateTorqueThresholdHeader, recv);
       stepper.moveTo(ticksToRotate);
+      xSemaphoreTake( calibratingMutex, portMAX_DELAY );
+      calibrating = true;
+      xSemaphoreGive( calibratingMutex );
       while (stepper.distanceToGo() != 0){
         stepper.run();
-        while(!torqueTransducer.is_ready()){} /* WAIT FOR TRANSDUCER TO BE READY */
-        long reading = torqueTransducer.read();
-        if(reading < minTorqReading){
-          minTorqReading = reading;
-        }
       }
-      xSemaphoreTake( readingTorqMutex, portMAX_DELAY );
-      TORQUE_THRESHOLD = minTorqReading * MIN_TORQUE_MULTIPLIER;
-      xSemaphoreGive( readingTorqMutex );
-      Serial.println("threshold: ");
+      xSemaphoreTake( calibratingMutex, portMAX_DELAY );
+      calibrating = false;
+      calibrated = true;
+      xSemaphoreGive( calibratingMutex );
+      Serial.println("Finished Calibrating");
+      delay(50);
+      Serial.print("After calibration: ");
       Serial.println(TORQUE_THRESHOLD);
       stepper.setCurrentPosition(0);
       break;
@@ -263,9 +277,9 @@ void parseStepperSetupMessage(String recv, float &stepAngle, int &dialingSpeed, 
   maxspeed = maxSpeedString.toInt();
 }
 
-int getTicksToRotateFromMessage(String recv) {
+int getTicksToRotateFromMessage(String header, String recv) {
   /* REMOVE HEADER FROM DATA */
-  int headerSizeToRemove = recv.indexOf(turnDialHeader) + turnDialHeader.length();
+  int headerSizeToRemove = recv.indexOf(header) + turnDialHeader.length();
   recv.remove(0, headerSizeToRemove);
 
   /* c_str() returns a const char, so we can't use strtok()
